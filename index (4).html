@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Theory of Constraints</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout idea: the page reads as one production line, top to bottom. Orange only ever marks the constraint. */
+:root{
+  --paper:#E7EAED;
+  --panel:#F5F6F8;
+  --ink:#13171C;
+  --muted:#56606B;
+  --line:#C3CAD1;
+  --signal:#F2550F;
+  --signal-text:#B23C05;
+  --signal-soft:rgba(242,85,15,.13);
+  --on-signal:#FFFFFF;
+  --grid:rgba(19,23,28,.045);
+  --good:#17784F;
+  --bad:#B4321C;
+  --f-display:"Big Shoulders Display","Big Shoulders","Oswald","Arial Narrow",sans-serif;
+  --f-body:"Instrument Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --wrap:1160px;
+  --gut:clamp(16px,4vw,40px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1013; --panel:#161B20; --ink:#E5E8EB; --muted:#8E98A3; --line:#2B333C;
+    --signal:#FF6326; --signal-text:#FF8B58; --signal-soft:rgba(255,99,38,.16); --on-signal:#140A04;
+    --grid:rgba(229,232,235,.035); --good:#43C38A; --bad:#FF6F5B; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1013; --panel:#161B20; --ink:#E5E8EB; --muted:#8E98A3; --line:#2B333C;
+  --signal:#FF6326; --signal-text:#FF8B58; --signal-soft:rgba(255,99,38,.16); --on-signal:#140A04;
+  --grid:rgba(229,232,235,.035); --good:#43C38A; --bad:#FF6F5B; color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} }
+body{
+  margin:0; background-color:var(--paper); color:var(--ink);
+  font:400 17px/1.58 var(--f-body);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:48px 48px;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--signal);outline-offset:3px;border-radius:4px}
+.wrap{max-width:var(--wrap);margin:0 auto;padding:0 var(--gut)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.mono{font-family:var(--f-mono)}
+button{font:inherit;color:inherit}
+
+/* ---------- top bar ---------- */
+.bar{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.bar-in{display:flex;align-items:center;gap:20px;height:56px}
+.brand{font:600 12px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;white-space:nowrap;text-decoration:none}
+.brand b{color:var(--signal-text);font-weight:600}
+.rail{position:relative;flex:1;max-width:600px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;height:28px}
+.rail::before,.rail-fill{content:"";position:absolute;left:6px;top:calc(50% - 1px);height:2px}
+.rail::before{right:6px;background:var(--line)}
+.rail-fill{background:var(--ink);width:0}
+.rail a{position:relative;z-index:1;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--line);display:block;transition:background .2s,border-color .2s,box-shadow .2s}
+.rail a.done{background:var(--ink);border-color:var(--ink)}
+.rail a.on{background:var(--signal);border-color:var(--signal);box-shadow:0 0 0 5px var(--signal-soft)}
+.rail a span{position:absolute;top:19px;left:50%;transform:translateX(-50%);font:500 10px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap;color:var(--muted);opacity:0;pointer-events:none;transition:opacity .15s}
+.rail a:hover span,.rail a:focus-visible span,.rail a.on span{opacity:1}
+.rail a.on span{color:var(--signal-text)}
+.tools{display:flex;align-items:center;gap:8px}
+.keys{font:500 11px/1 var(--f-mono);color:var(--muted);letter-spacing:.06em;white-space:nowrap}
+.keys kbd{font:inherit;border:1px solid var(--line);border-radius:4px;padding:2px 5px;background:var(--panel)}
+.timer,.timer-reset{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 12px;cursor:pointer;font:600 13px/1 var(--f-mono);font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:7px}
+.timer-reset{padding:7px 10px}
+.timer:hover,.timer-reset:hover{border-color:var(--ink)}
+.timer .tdot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.timer.run .tdot{background:var(--good)}
+.timer.low{border-color:var(--signal);color:var(--signal-text)}
+.timer.low .tdot{background:var(--signal)}
+@media (max-width:760px){ .keys{display:none} .rail a span{display:none} .brand span{display:none} }
+
+/* ---------- shared ---------- */
+section{padding:clamp(72px,10vw,124px) 0;border-top:1px solid var(--line);scroll-margin-top:56px}
+.eyebrow{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;font:500 12px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.eyebrow .num{color:var(--signal-text);font-weight:600}
+.req{border:1px solid var(--line);border-radius:999px;padding:5px 9px;letter-spacing:.06em}
+h2{font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:clamp(46px,7.2vw,92px);line-height:.88;letter-spacing:.004em;margin:18px 0 22px;text-wrap:balance}
+h3{font-family:var(--f-display);font-weight:800;text-transform:uppercase;letter-spacing:.01em;line-height:.95;margin:0}
+.lede{max-width:62ch;color:var(--muted);font-size:19px;margin:0}
+.lede strong{color:var(--ink);font-weight:600}
+.cite{font:400 12.5px/1.5 var(--f-mono);color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion: no-preference){
+    .rise{animation:rise linear both;animation-timeline:view();animation-range:entry 0% entry 45%}
+    @keyframes rise{from{opacity:.4;transform:translateY(28px)}to{opacity:1;transform:none}}
+  }
+}
+
+/* ---------- hero ---------- */
+.hero{border-top:0;padding:clamp(36px,6vw,64px) 0 clamp(56px,7vw,88px)}
+.hero h1{font-family:var(--f-display);font-weight:900;text-transform:uppercase;font-size:clamp(64px,13.4vw,180px);line-height:.8;letter-spacing:-.004em;margin:26px 0 0}
+.hero h1 .c{color:var(--signal);display:block}
+.hero-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:28px 48px;align-items:end;margin-top:34px}
+.matchbook{border-left:4px solid var(--signal);padding:2px 0 2px 20px}
+.matchbook .lbl{font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--signal-text)}
+.matchbook p{margin:10px 0 0;font-size:clamp(21px,2.3vw,27px);line-height:1.32;font-weight:500;max-width:30ch;text-wrap:pretty}
+.byline{display:grid;gap:6px;font:500 12px/1.4 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);justify-self:end;text-align:right}
+.byline b{color:var(--ink);font-weight:600}
+.floor{margin-top:44px;padding:16px 0 0;overflow:hidden}
+.floor-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:0 18px;font:500 11.5px/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.floor-top b{color:var(--signal-text);font-weight:600}
+.live{display:inline-flex;align-items:center;gap:8px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 0 0 var(--signal-soft);animation:ping 1.6s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 var(--signal-soft)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@media (prefers-reduced-motion: reduce){ .live i{animation:none} }
+#heroCanvas{display:block;width:100%;height:240px}
+@media (max-width:760px){ .hero-grid{grid-template-columns:1fr} .byline{justify-self:start;text-align:left} #heroCanvas{height:210px} }
+
+/* ---------- origin ---------- */
+.origin-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:32px;margin-top:44px;align-items:start}
+.person{padding:clamp(22px,3vw,34px)}
+.person .tag{font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.person h3{font-size:clamp(44px,5.6vw,72px);margin:14px 0 8px}
+.person .dates{font:500 13px/1.4 var(--f-mono);color:var(--muted)}
+.person p{max-width:56ch}
+.idea{margin-top:22px;padding:16px 18px;border-radius:12px;background:var(--signal-soft);border:1px solid color-mix(in srgb,var(--signal) 40%,transparent)}
+.idea .tag{color:var(--signal-text)}
+.idea p{margin:8px 0 0;font-weight:500}
+.timeline{list-style:none;margin:0;padding:6px 0 0;position:relative}
+.timeline::before{content:"";position:absolute;left:43px;top:16px;bottom:16px;width:2px;background:var(--line)}
+.timeline li{position:relative;display:grid;grid-template-columns:88px 1fr;gap:18px;padding:12px 0}
+.timeline .yr{font:800 30px/1 var(--f-display);text-align:center;position:relative;background:var(--paper);padding:6px 0;align-self:start}
+.timeline li.key .yr{color:var(--signal)}
+.timeline h4{margin:2px 0 4px;font-size:17px;font-weight:600}
+.timeline p{margin:0;color:var(--muted);font-size:15.5px}
+.primary{margin-top:18px;padding:18px 20px}
+.primary .tag{font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--signal-text)}
+.primary p{margin:10px 0 0;font-size:15.5px;line-height:1.55;padding-left:2em;text-indent:-2em}
+@media (max-width:860px){ .origin-grid{grid-template-columns:1fr} }
+
+/* ---------- five steps ---------- */
+.steps-grid{display:grid;grid-template-columns:minmax(300px,520px) 1fr;gap:clamp(24px,5vw,64px);align-items:center;margin-top:36px}
+#ring{width:100%;height:auto;display:block;overflow:visible}
+#ring .arc{fill:none;stroke:var(--muted);stroke-width:1.5}
+#ring .arc.loop{stroke:var(--signal);stroke-dasharray:5 6;stroke-width:2}
+#ring .ah{fill:var(--muted)}
+#ring .ah.loop{fill:var(--signal)}
+#ring .node{cursor:pointer;outline:none}
+#ring .node circle{fill:var(--panel);stroke:var(--ink);stroke-width:1.5;transition:fill .2s,stroke .2s}
+#ring .node:hover circle{stroke-width:2.5}
+#ring .node:focus-visible circle{stroke:var(--signal);stroke-width:3}
+#ring .node .n{font:800 32px var(--f-display);fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+#ring .node.on circle{fill:var(--signal);stroke:var(--signal)}
+#ring .node.on .n{fill:var(--on-signal)}
+#ring .lbl{font:600 13px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;fill:var(--muted)}
+#ring .lbl.on{fill:var(--signal-text)}
+#ring .mid-k{font:500 11px var(--f-mono);letter-spacing:.16em;fill:var(--muted);text-anchor:middle}
+#ring .mid{font:900 50px var(--f-display);fill:var(--ink);text-anchor:middle;text-transform:uppercase}
+.step-card{padding:clamp(22px,3vw,34px);min-height:360px;display:flex;flex-direction:column}
+.step-card .k{font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--signal-text)}
+.step-card h3{font-size:clamp(52px,6vw,80px);margin:12px 0 6px}
+.step-card .q{font:500 15px/1.4 var(--f-mono);color:var(--muted);margin:0 0 18px}
+.step-card dl{margin:0;display:grid;gap:14px}
+.step-card dt{font:600 11px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.step-card dd{margin:5px 0 0;max-width:58ch}
+.step-ctrl{display:flex;gap:8px;margin-top:auto;padding-top:22px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--line);background:var(--paper);border-radius:999px;padding:9px 16px;cursor:pointer;font:600 13px/1 var(--f-mono);letter-spacing:.04em;display:inline-flex;align-items:center;gap:8px;transition:border-color .15s,background .15s,transform .1s}
+.btn:hover{border-color:var(--ink)}
+.btn:active{transform:translateY(1px)}
+.btn.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+@media (max-width:900px){ .steps-grid{grid-template-columns:1fr} #ring{max-width:480px;margin:0 auto} .step-card{min-height:0} }
+
+/* ---------- simulator ---------- */
+.sim{margin-top:40px;overflow:hidden}
+.sim-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--line)}
+.sim-head .ttl{font:600 11.5px/1.3 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:600 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:7px 10px;color:var(--muted);transition:all .25s}
+.chip.done{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip.done::before{content:"✓ "}
+.lane{position:relative;padding:8px 20px 0}
+#simCanvas{display:block;width:100%;height:150px}
+.stations{display:grid;grid-template-columns:.5fr 1fr 1fr 1fr .3fr;gap:12px;padding:0 20px 18px;align-items:stretch}
+.edge{font:500 11px/1.35 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);align-self:center}
+.edge.r{text-align:right}
+.st{appearance:none;text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:12px 13px;cursor:pointer;display:grid;gap:6px;transition:border-color .2s,box-shadow .2s}
+.st:hover{border-color:var(--ink)}
+.st .nm{font-weight:600;font-size:15.5px;line-height:1.2}
+.st .staff{font:400 12px/1.3 var(--f-mono);color:var(--muted)}
+.st .cap{font:600 13px/1 var(--f-mono);font-variant-numeric:tabular-nums}
+.ubar{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.ubar i{display:block;height:100%;width:0;background:var(--ink);transition:width .5s}
+.st .use{font:500 11.5px/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.st.is-c{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal-soft)}
+.st.is-c .ubar i{background:var(--signal)}
+.st.is-c .use{color:var(--signal-text)}
+.st.no{animation:shake .45s}
+@keyframes shake{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+@media (prefers-reduced-motion: reduce){ .st.no{animation:none;border-color:var(--bad)} }
+.readout{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}
+.stat{padding:16px 20px;border-right:1px solid var(--line);display:grid;gap:6px;align-content:start}
+.stat:last-child{border-right:0}
+.stat .k{font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:800 46px/.9 var(--f-display);font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.stat .v small{font:500 12px/1 var(--f-mono);color:var(--muted)}
+.delta{font:600 11px/1 var(--f-mono);padding:4px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.delta.up{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.stat .v.c{color:var(--signal)}
+.controls{display:grid;grid-template-columns:1fr 1.7fr auto;gap:16px;padding:18px 20px;border-top:1px solid var(--line);align-items:start}
+.grp{display:grid;gap:8px}
+.grp .gk{font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.grp .row{display:flex;flex-wrap:wrap;gap:8px}
+.act{appearance:none;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:10px 12px;cursor:pointer;text-align:left;display:grid;gap:4px;min-width:150px;flex:1;transition:border-color .15s,background .15s,transform .1s}
+.act:hover:not(:disabled){border-color:var(--ink)}
+.act:active:not(:disabled){transform:translateY(1px)}
+.act b{font-weight:600;font-size:14.5px;line-height:1.25}
+.act span{font:500 11.5px/1.2 var(--f-mono);color:var(--muted)}
+.act.toc b i{font-style:normal;font:700 11px/1 var(--f-mono);color:var(--signal-text);margin-right:6px}
+.act[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.act[aria-pressed="true"] span,.act[aria-pressed="true"] b i{color:color-mix(in srgb,var(--paper) 75%,transparent)}
+.act:disabled{opacity:.5;cursor:not-allowed}
+.log{margin:0 20px 20px;padding:14px 16px;border-left:3px solid var(--signal);background:var(--paper);border-radius:0 10px 10px 0;font-size:16px;min-height:3.2em}
+.log b{font-weight:600}
+@media (max-width:900px){ .controls{grid-template-columns:1fr} .readout{grid-template-columns:1fr 1fr} .stat:nth-child(2){border-right:0} .stat:nth-child(-n+2){border-bottom:1px solid var(--line)} }
+@media (max-width:620px){ .stations{grid-template-columns:.32fr 1fr 1fr 1fr .14fr;gap:6px;padding:0 10px 14px} .lane{padding:8px 10px 0} .edge{font-size:0} .st{padding:9px 8px} .st .nm{font-size:13px} .st .staff{display:none} .st .cap{font-size:11px} .stat .v{font-size:36px} }
+
+/* ---------- evidence ---------- */
+.ev-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;margin-top:40px}
+.ev{padding:clamp(20px,2.6vw,30px);display:flex;flex-direction:column;gap:12px}
+.ev .top{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.sector{font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line);border-radius:999px;padding:6px 9px;color:var(--muted)}
+.yr{font:600 12px/1 var(--f-mono);color:var(--muted)}
+.big{font:900 clamp(72px,8vw,108px)/.82 var(--f-display);letter-spacing:-.01em}
+.big small{font:800 .42em var(--f-display);margin-left:4px;color:var(--muted)}
+.ev h3{font-size:26px}
+.ev p{margin:0;color:var(--muted);max-width:56ch}
+.ev .cite{margin-top:auto;padding-top:10px;border-top:1px dashed var(--line)}
+.hbars{display:grid;gap:9px;margin:4px 0}
+.hb{display:grid;grid-template-columns:120px 1fr 44px;gap:10px;align-items:center;font:500 12px/1 var(--f-mono)}
+.hb .t{height:10px;background:var(--line);border-radius:5px;overflow:hidden}
+.hb .t i{display:block;height:100%;background:var(--ink);border-radius:5px;transform-origin:left;animation:grow 1.2s cubic-bezier(.2,.7,.2,1) both .3s}
+.hb .p{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+@keyframes grow{from{transform:scaleX(0)}}
+@media (prefers-reduced-motion: reduce){ .hb .t i{animation:none} }
+@media (max-width:820px){ .ev-grid{grid-template-columns:1fr} }
+
+/* ---------- testing ---------- */
+.tabs{display:flex;gap:6px;margin-top:36px;flex-wrap:wrap}
+.tab{appearance:none;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:11px 16px;cursor:pointer;font:600 13px/1.2 var(--f-mono);text-align:left}
+.tab small{display:block;font-weight:400;color:var(--muted);margin-top:3px;font-size:11.5px}
+.tab[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.tab[aria-selected="true"] small{color:color-mix(in srgb,var(--paper) 70%,transparent)}
+.panel{margin-top:16px;padding:clamp(20px,3vw,32px)}
+.panel[hidden]{display:none}
+.pipe{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;counter-reset:p}
+.pipe li{position:relative;border:1px solid var(--line);background:var(--paper);border-radius:12px;padding:14px 14px 16px;display:grid;gap:6px;align-content:start}
+.pipe li:not(:last-child)::after{content:"";position:absolute;right:-9px;top:50%;width:8px;height:2px;background:var(--muted)}
+.pipe .pk{font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--signal-text)}
+.pipe .pv{font:800 30px/.95 var(--f-display);text-transform:uppercase}
+.pipe p{margin:0;font-size:14.5px;color:var(--muted);line-height:1.45}
+.likert{margin-top:22px;padding:18px 20px;border:1px dashed var(--line);border-radius:12px}
+.likert .tag{font:600 10.5px/1 var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.likert .stmt{margin:10px 0 14px;font-size:18px;font-weight:500}
+.scale{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.scale .end{font:500 11px/1.2 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;width:80px}
+.scale .end.r{text-align:right}
+.scale button{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--paper);cursor:pointer;font:700 15px/1 var(--f-mono);transition:all .15s}
+.scale button:hover{border-color:var(--ink)}
+.scale button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.likert .out{margin:14px 0 0;color:var(--muted);min-height:1.5em;font-size:15.5px}
+.obs{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}
+.obs ol{margin:0;padding-left:1.3em;display:grid;gap:10px}
+.obs ol li::marker{font-family:var(--f-mono);color:var(--signal-text);font-weight:600}
+.ba{display:grid;gap:12px}
+.ba .row{display:grid;grid-template-columns:64px 1fr;gap:12px;align-items:center;font:600 12px/1 var(--f-mono);text-transform:uppercase;letter-spacing:.06em}
+.ba .t{height:44px;position:relative}
+.ba .t i{position:absolute;inset:0 auto 0 0;border-radius:6px;background:var(--ink);transform-origin:left;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:var(--paper);font:800 22px/1 var(--f-display)}
+.ba .t i.after{background:var(--signal);color:var(--on-signal)}
+.ba .note{font:400 12px/1.4 var(--f-mono);color:var(--muted)}
+.method-note{margin:0 0 18px;max-width:70ch;color:var(--muted)}
+@media (max-width:960px){ .pipe{grid-template-columns:1fr 1fr} .pipe li::after{display:none} .obs{grid-template-columns:1fr} }
+@media (max-width:520px){ .pipe{grid-template-columns:1fr} .scale .end{width:auto;flex-basis:100%} .scale .end.r{text-align:left;order:9} }
+
+/* ---------- refs ---------- */
+.refs{list-style:none;margin:32px 0 0;padding:0;display:grid;gap:14px;max-width:88ch}
+.refs li{padding-left:2.2em;text-indent:-2.2em;font-size:15.5px;line-height:1.6}
+.refs a{text-decoration-color:var(--line);text-underline-offset:3px;word-break:break-word}
+.refs a:hover{text-decoration-color:var(--signal)}
+footer{border-top:1px solid var(--line);padding:28px 0 40px;font:500 12px/1.5 var(--f-mono);color:var(--muted);letter-spacing:.04em}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <a class="brand" href="#top">TOC<b>/</b><span>CCT476</span></a>
+    <nav class="rail" id="rail" aria-label="Sections"><i class="rail-fill" id="railFill"></i></nav>
+    <div class="tools">
+      <span class="keys"><kbd>←</kbd> <kbd>→</kbd> move · <kbd>T</kbd> timer</span>
+      <button class="timer" id="timer" type="button" aria-label="Start 3 minute presentation timer"><i class="tdot"></i><span id="timerTxt">3:00</span></button>
+      <button class="timer-reset" id="timerReset" type="button" aria-label="Reset timer">↺</button>
+    </div>
+  </div>
+</header>
+
+<main>
+<!-- ============ HERO / DEFINITION ============ -->
+<section class="hero" id="top" data-label="Definition">
+  <div class="wrap">
+    <div class="eyebrow"><span>CCT476 · Learning Reflection</span><span>Operations Management</span><span class="req">Req. 1 · Matchbook definition</span></div>
+    <h1>The Theory of <span class="c">Constraints</span></h1>
+    <div class="hero-grid">
+      <div class="matchbook">
+        <div class="lbl">Matchbook definition</div>
+        <p>A system can only go as fast as its slowest step. Find that step, improve it first, and the whole system speeds up.</p>
+      </div>
+      <div class="byline"><span>Presented by</span><b>Serena Yang</b><span>Fall 2026</span></div>
+    </div>
+    <div class="floor card">
+      <div class="floor-top">
+        <span class="live"><i></i>Live line · 4 work stations</span>
+        <span>System output = <b>16 units / hr</b> = the slowest step</span>
+      </div>
+      <canvas id="heroCanvas" aria-label="Animation of a four-step production line. Work piles up in front of the Weld station, the constraint, and only 16 units per hour leave the line." role="img"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ORIGIN ============ -->
+<section id="origin" data-label="Theorist">
+  <div class="wrap">
+    <div class="eyebrow rise"><span class="num">01</span><span>Where it comes from</span><span class="req">Req. 2 · Theorist</span><span class="req">Req. 3 · Primary journal reference</span></div>
+    <h2 class="rise">A physicist wrote a novel about a factory</h2>
+    <p class="lede rise">Every organization has at least one constraint that limits its performance. TOC says managers should aim their improvement effort at that constraint, instead of improving every department on its own.</p>
+
+    <div class="origin-grid">
+      <article class="person card rise">
+        <div class="tag">Original theorist</div>
+        <h3>Eliyahu M. Goldratt</h3>
+        <div class="dates">1947 – 2011 · Israeli physicist and management thinker</div>
+        <p>Goldratt brought TOC to a broad business audience through <em>The Goal</em> (1984), a business novel co-written with Jeff Cox. A plant manager has three months to save his failing factory and learns that the plant's output is set by its bottlenecks.</p>
+        <div class="idea">
+          <div class="tag mono" style="font:600 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase">Key idea from The Goal</div>
+          <p>A bottleneck is a resource whose capacity can't meet the demand placed on it. An hour lost at the bottleneck is an hour lost for the whole system.</p>
+        </div>
+      </article>
+
+      <div class="rise">
+        <ol class="timeline">
+          <li><div class="yr">1984</div><div><h4>The Goal</h4><p>Goldratt &amp; Cox introduce the bottleneck idea to managers through a story.</p></div></li>
+          <li class="key"><div class="yr">1987</div><div><h4>The Theory of Constraints Journal</h4><p>Goldratt publishes the theory's ideas in his own journal, starting with hierarchical management and its inherent conflict.</p></div></li>
+          <li><div class="yr">2007</div><div><h4>Academic review</h4><p>Watson et al. trace how TOC grew from a scheduling method into a full management philosophy.</p></div></li>
+        </ol>
+        <div class="primary card">
+          <div class="tag">Primary journal reference</div>
+          <p>Goldratt, E. M. (1987). Chapter 1: Hierarchical management—The inherent conflict. <em>The Theory of Constraints Journal, 1</em>(1), 1–17.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FIVE STEPS ============ -->
+<section id="steps" data-label="Five steps">
+  <div class="wrap">
+    <div class="eyebrow rise"><span class="num">02</span><span>The model</span><span class="req">Req. 4 · Graphical representation</span></div>
+    <h2 class="rise">Five focusing steps, on a loop</h2>
+    <p class="lede rise">Goldratt's improvement cycle. Click a step, or use <strong>Play loop</strong> to walk through it.</p>
+    <div class="steps-grid">
+      <svg id="ring" viewBox="-60 -14 580 494" role="group" aria-label="The five focusing steps arranged in a loop: Identify, Exploit, Subordinate, Elevate, Repeat"></svg>
+      <article class="step-card card" aria-live="polite">
+        <div class="k" id="stepK">Step 01 of 05</div>
+        <h3 id="stepName">Identify</h3>
+        <p class="q" id="stepQ"></p>
+        <dl>
+          <div><dt>What it means</dt><dd id="stepWhat"></dd></div>
+          <div><dt>In the restaurant</dt><dd id="stepEx"></dd></div>
+          <div id="stepResWrap"><dt>In the research</dt><dd id="stepRes"></dd></div>
+        </dl>
+        <div class="step-ctrl">
+          <button class="btn" id="stepPrev" type="button">← Back</button>
+          <button class="btn" id="stepNext" type="button">Next →</button>
+          <button class="btn solid" id="stepPlay" type="button" aria-pressed="false">▶ Play loop</button>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ APPLICATION / SIM ============ -->
+<section id="apply" data-label="Application">
+  <div class="wrap">
+    <div class="eyebrow rise"><span class="num">03</span><span>Application</span><span class="req">Req. 6 · Brief application</span></div>
+    <h2 class="rise">Fix the restaurant</h2>
+    <p class="lede rise">This restaurant has a line out the door all night. Two hosts, three chefs, <strong>one cashier</strong>. Your goal is to serve more guests per hour. Start with Step 1, then try spending money and watch what happens.</p>
+
+    <div class="sim card" id="sim">
+      <div class="sim-head">
+        <span class="ttl">Step progress</span>
+        <div class="chips" id="chips">
+          <span class="chip" data-s="1">1 Identify</span><span class="chip" data-s="2">2 Exploit</span><span class="chip" data-s="3">3 Subordinate</span><span class="chip" data-s="4">4 Elevate</span><span class="chip" data-s="5">5 Repeat</span>
+        </div>
+      </div>
+      <div class="lane"><canvas id="simCanvas" role="img" aria-label="Guests flow from the door through the host stand, kitchen and cashier. Dots show guests waiting in line."></canvas></div>
+      <div class="stations">
+        <div class="edge">Line out<br>the door</div>
+        <button class="st" type="button" data-i="0"><span class="nm">Host stand</span><span class="staff" id="staff0"></span><span class="cap" id="cap0"></span><span class="ubar"><i id="ubar0"></i></span><span class="use" id="use0"></span></button>
+        <button class="st" type="button" data-i="1"><span class="nm">Kitchen</span><span class="staff" id="staff1"></span><span class="cap" id="cap1"></span><span class="ubar"><i id="ubar1"></i></span><span class="use" id="use1"></span></button>
+        <button class="st" type="button" data-i="2"><span class="nm">Cashier</span><span class="staff" id="staff2"></span><span class="cap" id="cap2"></span><span class="ubar"><i id="ubar2"></i></span><span class="use" id="use2"></span></button>
+        <div class="edge r">Out</div>
+      </div>
+      <div class="readout">
+        <div class="stat"><span class="k">Guests served</span><span class="v"><span id="thr">18</span><small>/ hr</small><span class="delta" id="thrDelta">start</span></span></div>
+        <div class="stat"><span class="k">Constraint</span><span class="v" id="conName">?</span></div>
+        <div class="stat"><span class="k">Waiting inside</span><span class="v"><span id="wip">0</span><small>guests</small></span></div>
+        <div class="stat"><span class="k">Added cost</span><span class="v"><span id="cost">$0</span><small>/ month</small></span></div>
+      </div>
+      <div class="controls">
+        <div class="grp">
+          <span class="gk">Spend on staff</span>
+          <div class="row">
+            <button class="act" type="button" id="aChef"><b>Hire a chef</b><span>+$4,200 / month</span></button>
+            <button class="act" type="button" id="aHost"><b>Hire a host</b><span>+$3,400 / month</span></button>
+          </div>
+        </div>
+        <div class="grp">
+          <span class="gk">Use the five steps</span>
+          <div class="row">
+            <button class="act toc" type="button" id="aExploit" aria-pressed="false"><b><i>02</i>Free up the cashier</b><span>Move phone orders off the register · $0</span></button>
+            <button class="act toc" type="button" id="aRope" aria-pressed="false"><b><i>03</i>Seat at the register's pace</b><span>Host follows the constraint · $0</span></button>
+            <button class="act toc" type="button" id="aTerm"><b><i>04</i>Add a payment terminal</b><span>+$45 / month</span></button>
+          </div>
+        </div>
+        <div class="grp">
+          <span class="gk">&nbsp;</span>
+          <button class="btn" type="button" id="aReset">↺ Reset</button>
+        </div>
+      </div>
+      <p class="log" id="log" aria-live="polite"><b>Step 1 · Identify.</b> Click the station you think is the constraint. Hint: look for the line that keeps growing, and the station that never gets a break.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ EVIDENCE ============ -->
+<section id="evidence" data-label="Evidence">
+  <div class="wrap">
+    <div class="eyebrow rise"><span class="num">04</span><span>Recent research, 2020 onward</span><span class="req">Req. 5 · Three+ references testing the theory</span></div>
+    <h2 class="rise">It works outside the factory, too</h2>
+    <p class="lede rise">Recent studies test TOC in hospitals and clinics as well as in manufacturing.</p>
+    <div class="ev-grid">
+      <article class="ev card rise">
+        <div class="top"><span class="sector">Healthcare · Systematic review</span><span class="yr">2022</span></div>
+        <div class="big">42</div>
+        <h3>TOC implementations reviewed</h3>
+        <p>All 42 reported positive outcomes. Patient waiting time fell by 50% on average.</p>
+        <div class="hbars" aria-label="Share of implementations reporting each improvement">
+          <div class="hb"><span>Productivity</span><span class="t"><i style="width:98%"></i></span><span class="p">98%</span></div>
+          <div class="hb"><span>Timeliness</span><span class="t"><i style="width:83%"></i></span><span class="p">83%</span></div>
+        </div>
+        <div class="cite">Bacelar-Silva, Cox &amp; Rodrigues (2022), <em>Health Systems</em></div>
+      </article>
+      <article class="ev card rise">
+        <div class="top"><span class="sector">Healthcare · Action research</span><span class="yr">2024</span></div>
+        <div class="big">+64<small>%</small></div>
+        <h3>Patient throughput in weeks</h3>
+        <p>One doctor used the five focusing steps and drum-buffer-rope scheduling in his ophthalmology imaging practice, with little to no expense.</p>
+        <div class="cite">Bacelar-Silva, Cox &amp; Rodrigues (2024), <em>Health Systems</em></div>
+      </article>
+      <article class="ev card rise">
+        <div class="top"><span class="sector">Manufacturing · Case study</span><span class="yr">2023</span></div>
+        <div class="big">03</div>
+        <h3>Making Step 3 work</h3>
+        <p>In a make-to-order manufacturer, the authors designed how to subordinate the plant to its bottleneck by linking sales and operations planning. Protective capacity and sales–operations communication were key.</p>
+        <div class="cite">Orue, Lizarralde, Apaolaza &amp; Amorrortu (2023), <em>J. of Industrial Engineering and Management</em></div>
+      </article>
+      <article class="ev card rise">
+        <div class="top"><span class="sector">Primary care · Field application</span><span class="yr">2022</span></div>
+        <div class="big" style="font-size:clamp(52px,5.6vw,76px)">Whole system</div>
+        <h3>One method, one large practice</h3>
+        <p>Cox applied TOC as one holistic method across a large primary care provider practice, the gatekeeper link of the healthcare supply chain, to improve performance quickly and cheaply.</p>
+        <div class="cite">Cox (2022), <em>Health Systems</em></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TESTING ============ -->
+<section id="testing" data-label="Testing">
+  <div class="wrap">
+    <div class="eyebrow rise"><span class="num">05</span><span>How the theory is tested</span><span class="req">Req. 7 · Survey / observation details</span></div>
+    <h2 class="rise">Measure it, then measure again</h2>
+    <p class="lede rise">Researchers use numbers and observation. Surveys check whether firms that use TOC practices perform better. Before-and-after studies measure what changes once the five steps are applied.</p>
+
+    <div class="tabs" role="tablist" aria-label="Testing methods">
+      <button class="tab" role="tab" id="tab-s" aria-controls="pan-s" aria-selected="true">Survey<small>Panizzolo (2016)</small></button>
+      <button class="tab" role="tab" id="tab-o" aria-controls="pan-o" aria-selected="false" tabindex="-1">Before / after observation<small>Bacelar-Silva et al. (2024)</small></button>
+    </div>
+
+    <div class="panel card" role="tabpanel" id="pan-s" aria-labelledby="tab-s">
+      <ol class="pipe">
+        <li><span class="pk">01 Sample</span><span class="pv">61 plants</span><p>European manufacturing firms that had implemented TOC.</p></li>
+        <li><span class="pk">02 Respondents</span><span class="pv">7 per plant</span><p>Supervisors plus production, inventory and supply-chain managers.</p></li>
+        <li><span class="pk">03 Instrument</span><span class="pv">7-point Likert</span><p>Questionnaire rating how fully each TOC practice is in place.</p></li>
+        <li><span class="pk">04 Analysis</span><span class="pv">ANOVA + regression</span><p>Tests the link between TOC practices and manufacturing performance.</p></li>
+        <li><span class="pk">05 Finding</span><span class="pv">Schedule the constraint</span><p>A constraint-based master schedule and spare capacity at non-constraints mattered most.</p></li>
+      </ol>
+      <div class="likert">
+        <div class="tag">Try it · sample item written for this page</div>
+        <p class="stmt" id="likertQ">“Our production schedule is built around the capacity of our constraint resource.”</p>
+        <div class="scale" role="group" aria-labelledby="likertQ">
+          <span class="end">Strongly disagree</span>
+          <button type="button" aria-pressed="false">1</button><button type="button" aria-pressed="false">2</button><button type="button" aria-pressed="false">3</button><button type="button" aria-pressed="false">4</button><button type="button" aria-pressed="false">5</button><button type="button" aria-pressed="false">6</button><button type="button" aria-pressed="false">7</button>
+          <span class="end r">Strongly agree</span>
+        </div>
+        <p class="out" id="likertOut" aria-live="polite">Pick a number from 1 to 7.</p>
+      </div>
+    </div>
+
+    <div class="panel card" role="tabpanel" id="pan-o" aria-labelledby="tab-o" hidden>
+      <p class="method-note">Action research: the researcher takes part in the change and observes the results first-hand.</p>
+      <div class="obs">
+        <ol>
+          <li><b>Measure the baseline.</b> Count patients treated before any change.</li>
+          <li><b>Apply the five steps.</b> Use drum-buffer-rope scheduling and buffer management, set up in a matter of days.</li>
+          <li><b>Measure again.</b> Compare throughput a few weeks later.</li>
+        </ol>
+        <div class="ba" aria-label="Throughput before and after TOC, indexed so before equals 100">
+          <div class="row"><span>Before</span><span class="t"><i style="width:61%">100</i></span></div>
+          <div class="row"><span>After</span><span class="t"><i class="after" style="width:100%">164</i></span></div>
+          <span class="note">Indexed: throughput before TOC = 100</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ REFERENCES ============ -->
+<section id="refs" data-label="References">
+  <div class="wrap">
+    <div class="eyebrow"><span class="num">06</span><span>References</span><span class="req">APA 7th edition</span></div>
+    <h2>References</h2>
+    <ul class="refs">
+      <li>Bacelar-Silva, G. M., Cox, J. F., &amp; Rodrigues, P. P. (2022). Outcomes of managing healthcare services using the theory of constraints: A systematic review. <em>Health Systems, 11</em>(1), 1–16. <a href="https://doi.org/10.1080/20476965.2020.1813056">https://doi.org/10.1080/20476965.2020.1813056</a></li>
+      <li>Bacelar-Silva, G. M., Cox, J. F., &amp; Rodrigues, P. P. (2024). Achieving rapid and significant results in healthcare services by using the theory of constraints. <em>Health Systems, 13</em>(1), 48–61. <a href="https://doi.org/10.1080/20476965.2022.2115408">https://doi.org/10.1080/20476965.2022.2115408</a></li>
+      <li>Cox, J. F. (2022). Using the theory of constraints to create a paradigm shift in organisation performance at a large primary care provider practice. <em>Health Systems, 11</em>(2), 126–159. <a href="https://doi.org/10.1080/20476965.2021.1876533">https://doi.org/10.1080/20476965.2021.1876533</a></li>
+      <li>Goldratt, E. M. (1987). Chapter 1: Hierarchical management—The inherent conflict. <em>The Theory of Constraints Journal, 1</em>(1), 1–17.</li>
+      <li>Goldratt, E. M., &amp; Cox, J. (1984). <em>The goal: A process of ongoing improvement</em>. North River Press.</li>
+      <li>Orue, A., Lizarralde, A., Apaolaza, U., &amp; Amorrortu, I. (2023). Designing the process of implementing step three of the theory of constraints in a make-to-order environment: Integrating sales and operation planning. <em>Journal of Industrial Engineering and Management, 16</em>(2), 205–214. <a href="https://doi.org/10.3926/jiem.5127">https://doi.org/10.3926/jiem.5127</a></li>
+      <li>Panizzolo, R. (2016). Theory of constraints (TOC) production and manufacturing performance. <em>International Journal of Industrial Engineering and Management, 7</em>(1), 15–23. <a href="https://doi.org/10.24867/IJIEM-2016-1-103">https://doi.org/10.24867/IJIEM-2016-1-103</a></li>
+      <li>Watson, K. J., Blackstone, J. H., &amp; Gardiner, S. C. (2007). The evolution of a management philosophy: The theory of constraints. <em>Journal of Operations Management, 25</em>(2), 387–402. <a href="https://doi.org/10.1016/j.jom.2006.04.004">https://doi.org/10.1016/j.jom.2006.04.004</a></li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap"><span>Serena Yang · CCT476 Learning Reflection · Theory of Constraints</span><span>Diagrams and simulations are original illustrations of the theory.</span></div>
+</footer>
+
+<script>
+(() => {
+"use strict";
+const RM = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+/* ---------------- theme colours for canvas ---------------- */
+const C = {};
+function readColors(){
+  const s = getComputedStyle(document.documentElement);
+  for (const k of ["paper","panel","ink","muted","line","signal","signal-text","on-signal"]) C[k.replace("-","_")] = s.getPropertyValue("--" + k).trim();
+}
+readColors();
+
+/* ---------------- flow-line engine ----------------
+   Each station fills a capacity budget at its rate (units per hour of sim time).
+   When the budget reaches 1, it has input, and the next queue has room, one unit moves on.
+   Station 0 is fed by an endless line. Optional rope: station 0 releases only while WIP < rope. */
+class Line {
+  constructor(o){ this.n = o.caps.length; this.caps = o.caps.slice(); this.maxQ = o.maxQ; this.speed = o.speed; this.rope = o.rope ?? null; this.moveDur = o.moveDur ?? .5; this.reset(); }
+  reset(){ this.q = new Array(this.n).fill(0); this.b = new Array(this.n).fill(0); this.movers = []; this.exits = []; this.served = 0; }
+  mq(i){ return Array.isArray(this.maxQ) ? this.maxQ[i] : this.maxQ; }
+  incoming(i){ let c = 0; for (const m of this.movers) if (m.seg === i - 1) c++; return c; }
+  wip(){ let s = 0; for (let i = 1; i < this.n; i++) s += this.q[i]; for (const m of this.movers) if (m.seg < this.n - 1) s++; return s; }
+  step(dt){
+    const h = dt * this.speed / 60;
+    for (let i = this.n - 1; i >= 0; i--){
+      this.b[i] = Math.min(1, this.b[i] + this.caps[i] * h);
+      if (this.b[i] < 1) continue;
+      if (i > 0 && this.q[i] <= 0) continue;
+      if (i < this.n - 1 && this.q[i + 1] + this.incoming(i + 1) >= this.mq(i + 1)) continue;
+      if (i === 0 && this.rope != null && this.wip() >= this.rope) continue;
+      if (i > 0) this.q[i]--;
+      this.b[i] -= 1;
+      this.movers.push({ seg: i, t: 0 });
+    }
+    const keep = [];
+    for (const m of this.movers){
+      m.t += dt / this.moveDur;
+      if (m.t >= 1){ if (m.seg < this.n - 1) this.q[m.seg + 1]++; else { this.served++; this.exits.push({ t: 0 }); } }
+      else keep.push(m);
+    }
+    this.movers = keep;
+    for (const e of this.exits) e.t += dt / .9;
+    this.exits = this.exits.filter(e => e.t < 1);
+  }
+  warm(sec){ for (let k = 0; k < sec * 30; k++) this.step(1 / 30); }
+}
+
+/* ---------------- canvas renderer ---------------- */
+function rr(ctx, x, y, w, h, r){ ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function dot(ctx, x, y, r, col, a){ ctx.globalAlpha = a; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+function qPos(lay, i, k){
+  const anchor = lay.xs[i] - lay.bw / 2 - 10;
+  const limit = i === 0 ? lay.left : lay.xs[i - 1] + lay.bw / 2 + 10;
+  const per = Math.max(1, Math.floor(Math.max(lay.sp, anchor - limit) / lay.sp));
+  const row = Math.floor(k / per), col = k % per;
+  const off = row === 0 ? 0 : (row % 2 ? -1 : 1) * Math.ceil(row / 2);
+  return [anchor - col * lay.sp - lay.sp / 2, lay.cy + off * lay.sp];
+}
+
+const scenes = [];
+const vis = new IntersectionObserver(es => { for (const e of es){ const s = scenes.find(x => x.cv === e.target); if (s) s.visible = e.isIntersecting; } });
+function makeScene(cv, line, opts){
+  const sc = { cv, line, opts, visible: true, ctx: null, W: 0, H: 0, lay: null };
+  sc.fit = () => {
+    const r = cv.getBoundingClientRect(); const d = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.max(1, Math.round(r.width * d)); cv.height = Math.max(1, Math.round(r.height * d));
+    sc.ctx = cv.getContext("2d"); sc.ctx.setTransform(d, 0, 0, d, 0, 0); sc.W = r.width; sc.H = r.height; sc.lay = opts.layout(sc.W, sc.H);
+  };
+  sc.fit(); scenes.push(sc); vis.observe(cv); return sc;
+}
+function render(sc, t){
+  const { ctx, W, H, lay, line: L, opts: o } = sc; if (!ctx || !lay) return;
+  ctx.clearRect(0, 0, W, H);
+  const cI = o.constraint();
+  ctx.save(); ctx.strokeStyle = C.line; ctx.lineWidth = 2; ctx.setLineDash([3, 7]);
+  ctx.beginPath(); ctx.moveTo(lay.left, lay.cy); ctx.lineTo(lay.right, lay.cy); ctx.stroke(); ctx.restore();
+  for (let k = 0; k < (o.door || 0); k++){ const [x, y] = qPos(lay, 0, k); dot(ctx, x, y + (RM ? 0 : Math.sin(t * 2.2 + k * 1.3) * .9), lay.r, C.muted, .55); }
+  for (let i = 1; i < L.n; i++){
+    const isC = i === cI;
+    for (let k = 0; k < L.q[i]; k++){ const [x, y] = qPos(lay, i, k); dot(ctx, x, y, lay.r, isC ? C.signal : C.ink, isC ? 1 : .8); }
+  }
+  const cnt = {};
+  for (const m of L.movers){
+    const sx = lay.xs[m.seg] + lay.bw / 2; let ex, ey;
+    if (m.seg < L.n - 1){ const j = (cnt[m.seg] = (cnt[m.seg] || 0) + 1) - 1; [ex, ey] = qPos(lay, m.seg + 1, L.q[m.seg + 1] + j); }
+    else { ex = sx + 30; ey = lay.cy; }
+    const e = ease(Math.min(1, m.t));
+    dot(ctx, sx + (ex - sx) * e, lay.cy + (ey - lay.cy) * e - Math.sin(Math.PI * e) * 7, lay.r, m.seg + 1 === cI ? C.signal : C.ink, .92);
+  }
+  const ox = lay.xs[L.n - 1] + lay.bw / 2 + 30;
+  for (const e of L.exits) dot(ctx, ox + (lay.right - ox) * e.t, lay.cy, lay.r, C.ink, .9 * (1 - e.t));
+  for (let i = 0; i < L.n; i++){
+    const x = lay.xs[i] - lay.bw / 2, y = lay.cy - lay.bh / 2, isC = i === cI;
+    ctx.save();
+    if (isC){ ctx.shadowColor = C.signal; ctx.shadowBlur = RM ? 14 : 16 + Math.sin(t * 3) * 7; }
+    rr(ctx, x, y, lay.bw, lay.bh, 9); ctx.fillStyle = isC ? C.signal : C.panel; ctx.fill(); ctx.restore();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = isC ? C.signal : C.ink; rr(ctx, x, y, lay.bw, lay.bh, 9); ctx.stroke();
+    const busy = L.b[i] < 1;
+    ctx.globalAlpha = busy ? .95 : .28; ctx.fillStyle = isC ? C.on_signal : C.ink;
+    ctx.fillRect(x + 9, y + lay.bh - 11, (lay.bw - 18) * Math.min(1, L.b[i]), 3.5); ctx.globalAlpha = 1;
+    if (o.inside){ ctx.fillStyle = isC ? C.on_signal : C.ink; ctx.font = `600 ${lay.fs}px "IBM Plex Mono", ui-monospace, monospace`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(o.inside[i], lay.xs[i], lay.cy - 4); }
+  }
+  if (o.after) o.after(ctx, sc, cI);
+}
+
+/* ---------------- hero line ---------------- */
+const heroNames = ["Receive", "Cut", "Weld", "Ship"], heroCaps = [60, 48, 16, 60];
+const heroLine = new Line({ caps: heroCaps, maxQ: [0, 5, 18, 5], speed: 6, moveDur: .45 });
+heroLine.warm(14);
+const hero = makeScene($("#heroCanvas"), heroLine, {
+  door: 7, constraint: () => 2, animate: !RM,
+  layout(W, H){ const m = W < 560; return { xs: (m ? [.11, .35, .64, .9] : [.12, .37, .63, .88]).map(f => f * W), bw: m ? 44 : 74, bh: m ? 36 : 48, cy: H * .44, left: 8, right: W - 8, sp: m ? 9 : 12.5, r: m ? 3.2 : 4.4, fs: 10 }; },
+  after(ctx, sc, cI){
+    const { lay } = sc; const m = sc.W < 560;
+    for (let i = 0; i < 4; i++){
+      const x = lay.xs[i], yb = lay.cy + lay.bh / 2;
+      ctx.textAlign = "center"; ctx.textBaseline = "top";
+      ctx.fillStyle = i === cI ? C.signal_text : C.ink;
+      ctx.font = `800 ${m ? 16 : 22}px "Big Shoulders Display","Arial Narrow",sans-serif`;
+      ctx.fillText(heroNames[i].toUpperCase(), x, yb + 14);
+      ctx.fillStyle = i === cI ? C.signal_text : C.muted;
+      ctx.font = `500 ${m ? 9.5 : 11}px "IBM Plex Mono",monospace`;
+      ctx.fillText(heroCaps[i] + " / hr", x, yb + (m ? 34 : 42));
+    }
+    const x = lay.xs[cI], y = lay.cy - lay.bh / 2 - 12;
+    ctx.fillStyle = C.signal_text; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.font = `600 ${m ? 9 : 10.5}px "IBM Plex Mono",monospace`;
+    ctx.fillText("CONSTRAINT ▼", x, y);
+  }
+});
+
+/* ---------------- restaurant simulator ---------------- */
+const NAMES = ["host stand", "kitchen", "cashier"], SHORT = ["Host stand", "Kitchen", "Cashier"];
+const COST = { chef: 4200, host: 3400, term: 45 };
+const BASE = { hosts: 2, chefs: 3, terms: 1, exploit: false, rope: false };
+let S, identified, done;
+function resetState(){ S = { ...BASE }; identified = false; done = new Set(); }
+resetState();
+const caps = () => [S.hosts * 25, S.chefs * 14, Math.round(S.terms * 18 * (S.exploit ? 4 / 3 : 1))];
+const conOf = c => { let m = 0; for (let i = 1; i < c.length; i++) if (c[i] < c[m]) m = i; return m; };
+const cost = () => (S.hosts - BASE.hosts) * COST.host + (S.chefs - BASE.chefs) * COST.chef + (S.terms - BASE.terms) * COST.term;
+const money = v => "$" + v.toLocaleString("en-US");
+const tiles = $$(".st");
+const simLine = new Line({ caps: caps(), maxQ: 10, speed: 3, moveDur: .45 });
+simLine.warm(6);
+const simCv = $("#simCanvas");
+const sim = makeScene(simCv, simLine, {
+  door: 6, inside: ["HOST", "KITCHEN", "CASHIER"], animate: true,
+  constraint: () => identified ? conOf(simLine.caps) : -1,
+  layout(W, H){
+    const cr = simCv.getBoundingClientRect(); const m = W < 560;
+    const xs = tiles.map(t => { const r = t.getBoundingClientRect(); return r.left + r.width / 2 - cr.left; });
+    return { xs, bw: m ? 56 : 86, bh: m ? 34 : 44, cy: H / 2, left: 4, right: W - 4, sp: m ? 8.5 : 12, r: m ? 3 : 4.4, fs: m ? 7.5 : 10 };
+  }
+});
+
+const logEl = $("#log");
+function say(html){ logEl.innerHTML = html; }
+function mark(n){ done.add(n); }
+function updateUI(){
+  const c = caps(), thr = Math.min(...c), ci = conOf(c);
+  simLine.caps = c; simLine.rope = S.rope ? 3 : null;
+  for (let i = 0; i < 3; i++){
+    $("#cap" + i).textContent = c[i] + " guests / hr";
+    const u = Math.round(thr / c[i] * 100);
+    $("#ubar" + i).style.width = u + "%";
+    $("#use" + i).textContent = "busy " + u + "%";
+    tiles[i].classList.toggle("is-c", identified && i === ci);
+  }
+  $("#staff0").textContent = S.hosts + " hosts";
+  $("#staff1").textContent = S.chefs + " chefs";
+  $("#staff2").textContent = S.terms === 1 ? "1 register" : S.terms + " terminals";
+  $("#thr").textContent = thr;
+  const d = thr - 18, dEl = $("#thrDelta");
+  dEl.textContent = d > 0 ? "+" + d + " vs start" : "start"; dEl.classList.toggle("up", d > 0);
+  const cn = $("#conName"); cn.textContent = identified ? SHORT[ci] : "?"; cn.classList.toggle("c", identified);
+  $("#cost").textContent = money(cost());
+  $("#aExploit").setAttribute("aria-pressed", S.exploit); $("#aExploit").disabled = S.exploit;
+  $("#aRope").setAttribute("aria-pressed", S.rope);
+  $("#aChef").disabled = S.chefs >= 5; $("#aHost").disabled = S.hosts >= 3; $("#aTerm").disabled = S.terms >= 3;
+  for (const ch of $$(".chip")) ch.classList.toggle("done", done.has(+ch.dataset.s));
+}
+function change(fn, kind){
+  const c0 = caps(), thr0 = Math.min(...c0), ci0 = conOf(c0), cost0 = cost();
+  fn();
+  const c1 = caps(), thr1 = Math.min(...c1), ci1 = conOf(c1), spent = cost() - cost0;
+  let msg = "";
+  if (kind === "exploit"){
+    mark(2);
+    msg = `<b>Step 2 · Exploit.</b> The cashier now spends every minute on payments. Throughput went from ${thr0} to ${thr1} guests/hr for $0.`;
+  } else if (kind === "rope"){
+    if (S.rope){ mark(3); msg = `<b>Step 3 · Subordinate.</b> Throughput holds at ${thr1}, but the host now seats guests only as fast as the ${NAMES[ci1]} clears them. Watch the line inside shrink: less waiting, same output.`; }
+    else msg = `The host is seating guests as fast as possible again. Throughput is still ${thr1}, and the line inside starts to grow.`;
+  } else {
+    const where = kind === "chef" ? "kitchen" : kind === "host" ? "host stand" : "cashier";
+    const station = kind === "chef" ? 1 : kind === "host" ? 0 : 2;
+    if (thr1 === thr0){
+      msg = `<b>Nothing changed.</b> You added ${where} capacity for ${money(spent)}/month, and throughput is still ${thr1} guests/hr. The ${NAMES[ci1]} still sets the pace, so money spent anywhere else buys nothing.`;
+    } else {
+      if (station === ci0) mark(4);
+      msg = `<b>Step 4 · Elevate.</b> Throughput rose from ${thr0} to ${thr1} guests/hr for ${money(spent)}/month.`;
+      if (ci1 !== ci0){
+        mark(5);
+        msg += ` <b>The constraint moved to the ${NAMES[ci1]}.</b> That's Step 5: go back to Step 1 and start again.`;
+        if (!identified){ identified = true; mark(1); }
+      } else msg += ` The ${NAMES[ci1]} is still the constraint.`;
+    }
+  }
+  updateUI(); say(msg);
+}
+tiles.forEach((t, i) => t.addEventListener("click", () => {
+  const ci = conOf(caps());
+  if (i === ci){
+    const first = !identified; identified = true; mark(1); updateUI();
+    say(first
+      ? `<b>Step 1 · Identify. Correct.</b> The ${NAMES[ci]} is busy 100% of the time while the other stations wait, and its line keeps growing. Now try spending money on staff, or use Steps 2 to 4.`
+      : `Yes, the ${NAMES[ci]} is the constraint right now.`);
+  } else {
+    t.classList.remove("no"); void t.offsetWidth; t.classList.add("no");
+    say(`<b>Not quite.</b> The ${NAMES[i]} is busy only ${Math.round(Math.min(...caps()) / caps()[i] * 100)}% of the time, so it has spare capacity. Look for the station that never gets a break.`);
+  }
+}));
+$("#aChef").addEventListener("click", () => change(() => S.chefs++, "chef"));
+$("#aHost").addEventListener("click", () => change(() => S.hosts++, "host"));
+$("#aTerm").addEventListener("click", () => change(() => S.terms++, "term"));
+$("#aExploit").addEventListener("click", () => change(() => S.exploit = true, "exploit"));
+$("#aRope").addEventListener("click", () => change(() => S.rope = !S.rope, "rope"));
+$("#aReset").addEventListener("click", () => {
+  resetState(); simLine.reset(); simLine.caps = caps(); simLine.rope = null; simLine.warm(3); updateUI();
+  say(`<b>Step 1 · Identify.</b> Click the station you think is the constraint. Hint: look for the line that keeps growing, and the station that never gets a break.`);
+});
+updateUI();
+let lastWip = -1;
+function tickSim(){ const w = simLine.wip(); if (w !== lastWip){ $("#wip").textContent = w; lastWip = w; } }
+
+/* ---------------- animation loop ---------------- */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  for (const s of scenes){ if (!s.visible) continue; if (s.opts.animate) s.line.step(dt); render(s, now / 1000); }
+  tickSim();
+  requestAnimationFrame(frame);
+}
+function redrawAll(){ for (const s of scenes){ s.fit(); render(s, performance.now() / 1000); } }
+requestAnimationFrame(frame);
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(redrawAll, 120); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); redrawAll(); });
+new MutationObserver(() => { readColors(); redrawAll(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "class", "style"] });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(redrawAll);
+
+/* ---------------- five focusing steps ---------------- */
+const STEPS = [
+  { k: "Identify", q: "Where is the system stuck?", what: "Find the one resource whose capacity can't keep up with demand. Work piles up and waits in front of it.", ex: "The single cashier. Chefs and tables are ready, but guests stand in line to pay.", res: "" },
+  { k: "Exploit", q: "Is any of the constraint's time being wasted?", what: "Get the most out of the constraint with what you already have, before spending money.", ex: "Let the cashier handle only payments: move phone orders elsewhere and print bills before guests ask.", res: "" },
+  { k: "Subordinate", q: "Is everything else following the constraint's pace?", what: "Line every other step up behind the constraint. Running a non-constraint faster only builds piles of waiting work.", ex: "Time the kitchen and the host to the register's pace so guests aren't left waiting inside.", res: "Orue et al. (2023) designed how to carry out this step in a make-to-order plant by tying sales planning to operations." },
+  { k: "Elevate", q: "Is more capacity still needed?", what: "If the constraint still holds back the goal, add capacity to it: equipment, people or hours.", ex: "Add a second payment terminal.", res: "" },
+  { k: "Repeat", q: "Where did the constraint go?", what: "Once a constraint is broken, a new one appears somewhere else. Go back to Step 1, and don't let old habits become the next constraint.", ex: "With two terminals, the kitchen becomes the slowest step. Start again at Identify.", res: "Bacelar-Silva et al. (2024) ran all five steps, with drum-buffer-rope scheduling, in an ophthalmology imaging practice." }
+];
+const ring = $("#ring"), NS = "http://www.w3.org/2000/svg";
+const cx = 230, cy = 230, R = 150, NR = 40;
+const el = (n, a = {}, p = ring) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
+const pt = (deg, r = R) => [cx + r * Math.cos(deg * Math.PI / 180), cy + r * Math.sin(deg * Math.PI / 180)];
+const ang = k => -90 + k * 72;
+const defs = el("defs");
+for (const [id, cls] of [["ah", "ah"], ["ahl", "ah loop"]]){
+  const m = el("marker", { id, viewBox: "0 0 10 10", refX: 7, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" }, defs);
+  el("path", { d: "M0,0 L10,5 L0,10 z", class: cls }, m);
+}
+for (let k = 0; k < 5; k++){
+  const a1 = ang(k) + 18, a2 = ang(k + 1) - 18; const [x1, y1] = pt(a1), [x2, y2] = pt(a2);
+  const loop = k === 4;
+  el("path", { d: `M${x1},${y1} A${R},${R} 0 0 1 ${x2},${y2}`, class: "arc" + (loop ? " loop" : ""), "marker-end": `url(#${loop ? "ahl" : "ah"})` });
+}
+const midK = el("text", { x: cx, y: cy - 34, class: "mid-k" }); midK.textContent = "STEP 01";
+const mid = el("text", { x: cx, y: cy + 18, class: "mid" }); mid.textContent = "IDENTIFY";
+const loopLbl = el("text", { class: "lbl on" });
+const nodes = [], lbls = [];
+STEPS.forEach((s, k) => {
+  const [x, y] = pt(ang(k));
+  const g = el("g", { class: "node", transform: `translate(${x},${y})`, tabindex: 0, role: "button", "aria-label": `Step ${k + 1}: ${s.k}` });
+  el("circle", { r: NR }, g);
+  const t = el("text", { class: "n" }, g); t.textContent = "0" + (k + 1);
+  g.addEventListener("click", () => { stopPlay(); setStep(k); });
+  g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " "){ e.preventDefault(); stopPlay(); setStep(k); } });
+  nodes.push(g);
+  const a = ang(k), [lx, ly] = pt(a, R + 58); const c = Math.cos(a * Math.PI / 180);
+  const lb = el("text", { x: lx, y: ly + (k === 0 ? -4 : 5), class: "lbl", "text-anchor": Math.abs(c) < .2 ? "middle" : (c > 0 ? "start" : "end") });
+  lb.textContent = s.k; lbls.push(lb);
+});
+loopLbl.remove();
+let cur = 0;
+function setStep(k){
+  cur = (k + 5) % 5; const s = STEPS[cur];
+  nodes.forEach((n, i) => n.classList.toggle("on", i === cur));
+  lbls.forEach((n, i) => n.classList.toggle("on", i === cur));
+  midK.textContent = "STEP 0" + (cur + 1); mid.textContent = s.k.toUpperCase();
+  $("#stepK").textContent = `Step 0${cur + 1} of 05`; $("#stepName").textContent = s.k; $("#stepQ").textContent = s.q;
+  $("#stepWhat").textContent = s.what; $("#stepEx").textContent = s.ex;
+  $("#stepResWrap").hidden = !s.res; $("#stepRes").textContent = s.res;
+}
+setStep(0);
+let playT = null; const playBtn = $("#stepPlay");
+function stopPlay(){ if (playT){ clearInterval(playT); playT = null; } playBtn.textContent = "▶ Play loop"; playBtn.setAttribute("aria-pressed", "false"); }
+playBtn.addEventListener("click", () => {
+  if (playT){ stopPlay(); return; }
+  setStep(cur + 1); playT = setInterval(() => setStep(cur + 1), 3200);
+  playBtn.textContent = "❚❚ Pause"; playBtn.setAttribute("aria-pressed", "true");
+});
+$("#stepPrev").addEventListener("click", () => { stopPlay(); setStep(cur - 1); });
+$("#stepNext").addEventListener("click", () => { stopPlay(); setStep(cur + 1); });
+
+/* ---------------- testing tabs + likert ---------------- */
+const tabs = $$(".tab");
+function selTab(t){
+  tabs.forEach(x => { const on = x === t; x.setAttribute("aria-selected", on); x.tabIndex = on ? 0 : -1; $("#" + x.getAttribute("aria-controls")).hidden = !on; });
+}
+tabs.forEach((t, i) => {
+  t.addEventListener("click", () => selTab(t));
+  t.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight" || e.key === "ArrowLeft"){ e.preventDefault(); e.stopPropagation(); const n = tabs[(i + (e.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length]; selTab(n); n.focus(); }
+  });
+});
+const LK = ["", "strongly disagree", "disagree", "somewhat disagree", "neutral", "somewhat agree", "agree", "strongly agree"];
+$$(".scale button").forEach(b => b.addEventListener("click", () => {
+  $$(".scale button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  const v = +b.textContent;
+  $("#likertOut").textContent = `You chose ${v} (${LK[v]}). In a study like this, each plant's answers are combined into a TOC-practice score, and ANOVA and regression test whether higher scores go with better performance.`;
+}));
+
+/* ---------------- section rail + keyboard ---------------- */
+const secs = $$("main > section");
+const rail = $("#rail"), fill = $("#railFill");
+const dots = secs.map(s => { const a = document.createElement("a"); a.href = "#" + s.id; a.innerHTML = `<span>${s.dataset.label}</span>`; a.setAttribute("aria-label", s.dataset.label); rail.appendChild(a); return a; });
+let active = 0;
+function spy(){
+  const y = scrollY + 140; let i = 0;
+  secs.forEach((s, k) => { if (s.offsetTop <= y) i = k; });
+  if (innerHeight + scrollY >= document.documentElement.scrollHeight - 4) i = secs.length - 1;
+  active = i;
+  const top = secs[i].offsetTop, next = secs[i + 1] ? secs[i + 1].offsetTop : top + 1;
+  const f = i === secs.length - 1 ? 0 : Math.max(0, Math.min(1, (y - top) / (next - top)));
+  const p = (i + f) / (secs.length - 1);
+  fill.style.width = `calc((100% - 12px) * ${p})`;
+  dots.forEach((d, k) => { d.classList.toggle("on", k === i); d.classList.toggle("done", k < i); if (k === i) d.setAttribute("aria-current", "true"); else d.removeAttribute("aria-current"); });
+}
+addEventListener("scroll", spy, { passive: true }); addEventListener("resize", spy); spy();
+function go(i){ i = Math.max(0, Math.min(secs.length - 1, i)); secs[i].scrollIntoView({ behavior: RM ? "auto" : "smooth", block: "start" }); }
+addEventListener("keydown", e => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const tag = (e.target.tagName || "").toLowerCase(); if (tag === "input" || tag === "textarea" || tag === "select") return;
+  if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === "j"){ e.preventDefault(); go(active + 1); }
+  else if (e.key === "ArrowLeft" || e.key === "PageUp" || e.key === "k"){ e.preventDefault(); go(active - 1); }
+  else if (e.key === "t" || e.key === "T"){ toggleTimer(); }
+});
+
+/* ---------------- 3-minute timer ---------------- */
+const tBtn = $("#timer"), tTxt = $("#timerTxt"); let left = 180, tInt = null;
+const fmt = s => Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+function paintTimer(){ tTxt.textContent = fmt(left); tBtn.classList.toggle("run", !!tInt); tBtn.classList.toggle("low", left <= 30); tBtn.setAttribute("aria-label", (tInt ? "Pause" : "Start") + " timer, " + fmt(left) + " left"); }
+function toggleTimer(){
+  if (tInt){ clearInterval(tInt); tInt = null; }
+  else { if (left <= 0) left = 180; tInt = setInterval(() => { left--; if (left <= 0){ left = 0; clearInterval(tInt); tInt = null; } paintTimer(); }, 1000); }
+  paintTimer();
+}
+tBtn.addEventListener("click", toggleTimer);
+$("#timerReset").addEventListener("click", () => { clearInterval(tInt); tInt = null; left = 180; paintTimer(); });
+paintTimer();
+})();
+</script>
+</body>
+</html>
